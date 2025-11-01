@@ -1,0 +1,45 @@
+
+name: Run Weather Pipeline
+
+on:
+  # Runs "at minute 0 of every hour" (e.g., 1:00, 2:00, 3:00)
+  schedule:
+    - cron: '0 * * * *'
+
+  # Adds a button to run the job manually (for testing)
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Opens repository code
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Set up the Python version
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Install project's libraries
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Create credentials.json file from the secret
+      - name: Create Google Credentials File
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "$GCP_SA_KEY" > credentials.json
+
+      # Run main Python script
+      - name: Run Weather ETL Script
+        env:
+          API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: |
+          python fetch-weather.py
