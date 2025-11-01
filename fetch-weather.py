@@ -4,14 +4,19 @@ import pandas as pd
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+import gspread
+import gspread_dataframe
 
-load_dotenv() # Load environment variables from .env file
+# Load environment variables from .env file
+load_dotenv() 
 
-API_KEY = os.getenv("API_KEY") # Get key from .env
-MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
+API_KEY = os.getenv("API_KEY") 
+# MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 CITIES = ["Abuja", "London", "Tokyo", "Lagos", "Paris", "New York", "Kaduna"]
 BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
-DB_NAME = "weather_db"
+
+CREDENTIALS_FILE = "credentials.json" 
+SHEET_NAME = "Live Weather Data" 
 
 def transform_data(raw_data):
     city_name = raw_data.get('name')
@@ -37,6 +42,7 @@ def transform_data(raw_data):
     # Script run Timestamp
     record_datetime_utc = datetime.utcnow()
 
+    # Dictionary to hold weather details
     clean_data = {
         'city': city_name,
         'country': country,
@@ -54,9 +60,11 @@ def transform_data(raw_data):
     df = pd.DataFrame(clean_data, index=[0])
     return df
 
+# Main Exec
 print("Starting weather data pipeline...")
 
-all_dataframes = [] # List to hold DataFrames for each city
+# List to hold DataFrames for each city
+all_dataframes = [] 
 
 print(f"Attempting to fetch data for {len(CITIES)} cities...")
 
@@ -78,35 +86,62 @@ for city in CITIES:
     except Exception as e:
         print(f"An error occurred fetching data for {city}: {e}")
 
-#Load into Duckdb
+#Load into GoogleSheets
 if all_dataframes:
     final_df = pd.concat(all_dataframes, ignore_index=True)
-
+    
+    # Re-order columns to be a bit more logical
+    columns_order = [
+        'record_datetime_utc',
+        'report_datetime_utc',
+        'city',
+        'country',
+        'main_weather',
+        'description',
+        'temp_celsius',
+        'feels_like_celsius',
+        'humidity_percent',
+        'wind_speed_mps'
+    ]
+    final_df = final_df[columns_order]
+    
     print("\n Combined Data (DataFrame)")
     print(final_df)
+    
+    try:
+        print(f"\nConnecting to Google Sheets using {CREDENTIALS_FILE}...")
+        # Authenticate using the .json service account file
+        gc = gspread.service_account(filename=CREDENTIALS_FILE)
+        
+        # Open the Google Sheet by its name
+        sh = gc.open(SHEET_NAME)
+        
+        # Select the first worksheet (tab)
+        worksheet = sh.get_worksheet(0)
+        
+        print(f"Loading data into worksheet '{worksheet.title}'...")
+        
+        # Check if the sheet is empty (A1 has no value)
+        a1_val = worksheet.get('A1')
+        if not a1_val:
+            print("Sheet is empty, writing headers...")
+            # Convert DataFrame columns to a list of lists for gspread
+            headers = [final_df.columns.values.tolist()]
+            worksheet.update(headers, 'A1')
 
-    connection_string = f"md:{DB_NAME}?motherduck_token={MOTHERDUCK_TOKEN}"
+        # Convert timestamp columns to strings befroe sending them
+        final_df['record_datetime_utc'] = final_df['record_datetime_utc'].astype(str)
+        final_df['report_datetime_utc'] = final_df['report_datetime_utc'].astype(str)
+
+        # Append all the new data rows (without the header)
+        data_to_append = final_df.values.tolist()
+        worksheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
+        
+        print(f"Successfully loaded {len(final_df)} records into '{SHEET_NAME}'.")
     
-    print(f"\nConnecting to MotherDuck database: {DB_NAME}")
-    conn = duckdb.connect(connection_string, read_only=False)
-    
-    table_name = "weather_reports"
-    
-    conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS {table_name} AS 
-        SELECT * FROM final_df LIMIT 0
-    """)
-    
-    conn.execute(f"INSERT INTO {table_name} SELECT * FROM final_df")
-    
-    print(f"Successfully loaded {len(final_df)} records into '{table_name}' table.")
-    
-    # Verification Step
-    print(f"\nVerifying data from '{table_name}' table (last 5 records):")
-    result_df = conn.sql(f"SELECT * FROM {table_name} ORDER BY record_datetime_utc DESC LIMIT 5").df()
-    print(result_df)
-    
-    conn.close()
+    except Exception as e:
+        print(f"An error occurred loading data to Google Sheets: {e}")
+
 else:
     print("No data was fetched. Database was not updated.")
 
