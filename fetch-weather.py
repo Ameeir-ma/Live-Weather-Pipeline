@@ -10,7 +10,7 @@ import gspread_dataframe
 # Load environment variables from .env file
 load_dotenv() 
 
-API_KEY = os.getenv("API_KEY") 
+API_KEY = os.getenv("OPENWEATHER_API_KEY") 
 # MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 CITIES = ["Abuja", "London", "Tokyo", "Lagos", "Paris", "New York", "Kaduna"]
 BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
