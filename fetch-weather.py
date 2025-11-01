@@ -113,31 +113,43 @@ if all_dataframes:
         # Authenticate using the .json service account file
         gc = gspread.service_account(filename=CREDENTIALS_FILE)
         
-        # Open the Google Sheet by its name
         sh = gc.open(SHEET_NAME)
         
-        # Select the first worksheet (tab)
-        worksheet = sh.get_worksheet(0)
+        worksheet = sh.worksheet("Sheet1")
         
         print(f"Loading data into worksheet '{worksheet.title}'...")
         
-        # Check if the sheet is empty (A1 has no value)
-        a1_val = worksheet.get('A1')
-        if not a1_val:
-            print("Sheet is empty, writing headers...")
-            # Convert DataFrame columns to a list of lists for gspread
-            headers = [final_df.columns.values.tolist()]
-            worksheet.update(headers, 'A1')
+        # Define the headers
+        headers = final_df.columns.values.tolist()
 
-        # Convert timestamp columns to strings befroe sending them
+        # Get the headers in the sheet
+        headers_in_sheet = []
+        try:
+            headers_in_sheet = worksheet.row_values(1)
+        except gspread.exceptions.APIError:
+            pass 
+
+        # Check if headers are missing or incorrect
+        if not headers_in_sheet or headers_in_sheet != headers:
+            print("Headers are missing or incorrect. Clearing sheet and writing new headers...")
+            worksheet.clear()
+    
+            worksheet.append_row(headers, value_input_option='USER_ENTERED')
+            print("Headers written successfully.")
+        else:
+            print("Headers are correct, skipping...")
+        
+
+        # Convert timestamp columns to strings
         final_df['record_datetime_utc'] = final_df['record_datetime_utc'].astype(str)
         final_df['report_datetime_utc'] = final_df['report_datetime_utc'].astype(str)
 
-        # Append all the new data rows (without the header)
+        # Now, append all the data rows
+        print("Appending new data rows...")
         data_to_append = final_df.values.tolist()
         worksheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
         
-        print(f"Successfully loaded {len(final_df)} records into '{SHEET_NAME}'.")
+        print(f"Successfully loaded {len(final_df)} new records into '{SHEET_NAME}'.")
     
     except Exception as e:
         print(f"An error occurred loading data to Google Sheets: {e}")
