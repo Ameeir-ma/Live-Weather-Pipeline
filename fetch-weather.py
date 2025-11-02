@@ -6,12 +6,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 import gspread
 import gspread_dataframe
-
+import rich
 # Load environment variables from .env file
 load_dotenv() 
 
 API_KEY = os.getenv("OPENWEATHER_API_KEY") 
-# MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 CITIES = ["Abuja", "London", "Tokyo", "Lagos", "Paris", "New York", "Kaduna"]
 BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
 
