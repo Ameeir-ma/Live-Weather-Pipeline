@@ -40,6 +40,6 @@ jobs:
       # Run main Python script
       - name: Run Weather ETL Script
         env:
-          API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
           python fetch-weather.py
